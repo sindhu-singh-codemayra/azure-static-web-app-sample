@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.19.0
+          node-version: 20.19.1
           cache: 'npm'
 
       # ✅ Install dependencies and build the React app
@@ -47,7 +47,7 @@ jobs:
           api_location: "api"         # API folder (optional)
           output_location: "build"    # Built app output folder
         env:
-          NODE_VERSION: 20.19.0       # Ensures Oryx picks Node 20 if it runs
+          NODE_VERSION: 20.19.1       # Ensures Oryx picks Node 20 if it runs
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
