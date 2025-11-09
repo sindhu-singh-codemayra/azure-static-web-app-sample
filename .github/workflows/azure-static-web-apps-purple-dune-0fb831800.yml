@@ -45,7 +45,7 @@ jobs:
           action: "upload"
           app_location: "/"           # React app source
           api_location: "api"         # API folder (optional)
-          output_location: "build"    # Built app output folder
+          output_location: "dist"    # Built app output folder
         env:
           NODE_VERSION: 20.19.1       # Ensures Oryx picks Node 20 if it runs
 
