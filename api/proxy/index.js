@@ -1,7 +1,25 @@
 import { app } from "@azure/functions";
 // Note: Relying on the global 'fetch' available in Node.js 18+ runtime
-// If you are using an older runtime, you would need to install 'node-fetch'
-// and import it, but V4 is typically run on newer Node versions.
+
+/**
+ * Creates a consistent 500 error response for configuration issues.
+ * @param {string} message - The error message indicating what is missing.
+ * @param {import('@azure/functions').Context} context - The Azure Function context for logging.
+ * @returns {import('@azure/functions').HttpResponseInit} The standardized HTTP response object.
+ */
+function createConfigErrorResponse(message, context) {
+    context.error(`Configuration Error: ${message}`);
+    return {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+        jsonBody: {
+            statusCode: 500,
+            error: "Configuration Error",
+            message: message,
+            detail: "This proxy function requires specific environment variables (VITE_BACKEND_BASE_URL and VITE_X_FUNCTIONS_KEY) to be set."
+        }
+    };
+}
 
 /**
  * Proxy handler: forwards requests under /api/proxy/* to your backend
@@ -13,32 +31,32 @@ export async function proxyHandler(request, context) {
         : "";
 
     const backendBase = process.env.VITE_BACKEND_BASE_URL;
+    const xKey = process.env.VITE_X_FUNCTIONS_KEY;
 
+    // 1. MANDATORY CHECK: VITE_BACKEND_BASE_URL
     if (!backendBase) {
-        context.warn("VITE_BACKEND_BASE_URL not set. Returning sample response.");
-        return {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: "Hello from proxy! Backend not configured." })
-        };
+        return createConfigErrorResponse("VITE_BACKEND_BASE_URL is not set.", context);
+    }
+
+    // 2. MANDATORY CHECK: VITE_X_FUNCTIONS_KEY
+    if (!xKey) {
+        return createConfigErrorResponse("VITE_X_FUNCTIONS_KEY is not set.", context);
     }
 
     const backendUrl = `${backendBase}/${path}${query}`;
-    const xKey = process.env.VITE_X_FUNCTIONS_KEY || "";
 
     // Using context.log/context.info for standard logging
     context.log(`--- Incoming Request ---`);
-    context.log(`Method: ${request.method}`);
-    context.log(`Path: ${path}`);
-    context.log(`Query: ${JSON.stringify(request.query)}`);
     context.log(`Target backend URL: ${backendUrl}`);
-    context.log(`Headers: ${JSON.stringify(request.headers)}`);
 
-    // In a real proxy, you would typically forward more headers,
-    // e.g., Authorization, User-Agent, etc.
+    // Headers to be forwarded/set
     const headers = {
-        "Content-Type": "application/json",
-        "x-functions-key": xKey
+        // Ensure backend expects JSON for body processing
+        "Content-Type": request.headers.get("content-type") || "application/json",
+        // Forward the required function key
+        "x-functions-key": xKey,
+        // Optionally forward other headers like Authorization, etc.
+        // "Authorization": request.headers.get("authorization"), 
     };
 
     const method = request.method;
@@ -62,19 +80,17 @@ export async function proxyHandler(request, context) {
             body: text
         };
     } catch (err) {
-        // FIX: Changed context.error to context.error (correct V4 logging)
-        context.error(`Proxy error: ${err.message}`); 
-        
+        // Handle network or other fetch-related errors
+        context.error(`Proxy error connecting to backend: ${err.message}`);
         context.log(`Stack: ${err.stack}`);
-        context.log(`Backend URL attempted: ${backendUrl}`);
-        
+
         return {
-            status: 500,
+            status: 502, // 502 Bad Gateway is appropriate for a proxy failing to connect to the upstream server
             headers: { "Content-Type": "application/json" },
             jsonBody: {
-                error: "Internal proxy error",
+                statusCode: 502,
+                error: "Proxy Connection Error",
                 message: err.message,
-                stack: err.stack,
                 backendUrl
             }
         };
