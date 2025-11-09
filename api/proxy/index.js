@@ -1,12 +1,5 @@
 import { app } from "@azure/functions";
-// Note: Relying on the global 'fetch' available in Node.js 18+ runtime
 
-/**
- * Creates a consistent 500 error response for configuration issues.
- * @param {string} message - The error message indicating what is missing.
- * @param {import('@azure/functions').Context} context - The Azure Function context for logging.
- * @returns {import('@azure/functions').HttpResponseInit} The standardized HTTP response object.
- */
 function createConfigErrorResponse(message, context) {
     context.error(`Configuration Error: ${message}`);
     return {
@@ -21,9 +14,6 @@ function createConfigErrorResponse(message, context) {
     };
 }
 
-/**
- * Proxy handler: forwards requests under /api/proxy/* to your backend
- */
 export async function proxyHandler(request, context) {
     const path = request.params.path || "";
     const query = request.query
@@ -33,34 +23,36 @@ export async function proxyHandler(request, context) {
     const backendBase = process.env.VITE_BACKEND_BASE_URL;
     const xKey = process.env.VITE_X_FUNCTIONS_KEY;
 
-    // 1. MANDATORY CHECK: VITE_BACKEND_BASE_URL
-    if (!backendBase) {
+    // MANDATORY CHECK: VITE_BACKEND_BASE_URL
+    if (!backendBase) 
         return createConfigErrorResponse("VITE_BACKEND_BASE_URL is not set.", context);
-    }
 
-    // 2. MANDATORY CHECK: VITE_X_FUNCTIONS_KEY
-    if (!xKey) {
+    //MANDATORY CHECK: VITE_X_FUNCTIONS_KEY
+    if (!xKey)
         return createConfigErrorResponse("VITE_X_FUNCTIONS_KEY is not set.", context);
-    }
 
     const backendUrl = `${backendBase}/${path}${query}`;
 
-    // Using context.log/context.info for standard logging
-    context.log(`--- Incoming Request ---`);
-    context.log(`Target backend URL: ${backendUrl}`);
+    
+    // Update to forward all incoming headers
+    const headers = {};
+    
+    // Iterate over all incoming headers and copy them to the headers object
+    for (const [key, value] of request.headers.entries()) {
+        // It's critical to skip the 'host' header as it references the Azure Function
+        // domain and can cause routing/SSL issues on the backend.
+        if (key.toLowerCase() !== 'host') {
+            headers[key] = value;
+        }
+    }
 
-    // Headers to be forwarded/set
-    const headers = {
-        // Ensure backend expects JSON for body processing
-        "Content-Type": request.headers.get("content-type") || "application/json",
-        // Forward the required function key
-        "x-functions-key": xKey,
-        // Optionally forward other headers like Authorization, etc.
-        // "Authorization": request.headers.get("authorization"), 
-    };
+    // Explicitly set the required function key, overwriting if it was passed by the client
+    headers["x-functions-key"] = xKey;
+    
+    context.log(`Forwarding Headers: ${JSON.stringify(Object.keys(headers))}`);
 
     const method = request.method;
-    // Note: request.text() is used to reliably get the body content for POST/PUT/PATCH
+    // Note:request.text() is used to reliably get the body content for POST/PUT/PATCH
     const body = method === "GET" || method === "HEAD" ? undefined : await request.text();
 
     try {
@@ -71,7 +63,6 @@ export async function proxyHandler(request, context) {
         context.log(`Status: ${res.status}`);
         context.log(`Content-Type: ${res.headers.get("content-type")}`);
 
-        // Forwarding the status and body from the backend
         return {
             status: res.status,
             headers: {
@@ -85,7 +76,7 @@ export async function proxyHandler(request, context) {
         context.log(`Stack: ${err.stack}`);
 
         return {
-            status: 502, // 502 Bad Gateway is appropriate for a proxy failing to connect to the upstream server
+            status: 502, //502 Bad Gateway is appropriate for a proxy failing to connect to the upstream server
             headers: { "Content-Type": "application/json" },
             jsonBody: {
                 statusCode: 502,
