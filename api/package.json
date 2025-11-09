@@ -1,0 +1,20 @@
+{
+  "name": "azure-static-web-app-sample-api",
+  "version": "1.0.0",
+  "description": "Azure Functions API for Azure Static Web App",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "start": "func start",
+    "start:watch": "func start --verbose"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.4.0",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "type": "module"
+}
